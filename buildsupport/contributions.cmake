@@ -1,7 +1,4 @@
 macro(process_contribution contribution_list)
-    #Create library names to solve dependency problems with macros that will be called at each lib subdirectory
-    set(ns3-contrib-libs)
-
     #Create handles to build libraries
     foreach(libname ${contribution_list})
         list(APPEND lib${libname} ns${NS3_VER}-contrib-${libname}-${build_type})
@@ -10,11 +7,7 @@ macro(process_contribution contribution_list)
 
     #Add contribution folders to be built
     foreach(libname ${contribution_list})
-        add_subdirectory("${libname}")
-
-        #Just copying every single header into ns3 include folder
-        file(GLOB_RECURSE include_files ${PROJECT_SOURCE_DIR}/contrib/${libname}/*.h)
-        file(COPY ${include_files} DESTINATION ${CMAKE_HEADER_OUTPUT_DIRECTORY})
+        add_subdirectory("contrib/${libname}")
     endforeach()
 endmacro()
 
@@ -96,11 +89,21 @@ macro (build_contrib_lib contrib_name components)
     #Create the contrib library with their components
     add_library(${lib${contrib_name}} SHARED ${component_target_objects})
 
+    #Windows dlls require export headers for executables (╯°□°）╯︵ ┻━┻)
+    #if(WIN32 AND ${NS3_SHARED})
+    #    generate_export_header(${lib${contrib_name}} EXPORT_FILE_NAME libcontrib-${contrib_name}_export.h)
+    #    file(COPY ${CMAKE_CACHEFILE_DIR}/contrib/${contrib_name}/libcontrib-${contrib_name}_export.h DESTINATION ${CMAKE_HEADER_OUTPUT_DIRECTORY}/)
+    #endif()
+
     #Link NS3 and/or 3rd-party dependencies
     target_link_libraries(${lib${contrib_name}} PUBLIC ${${contrib_name}_libraries_to_link})
 
     #Write a module header that includes all headers from that module
     FILE(GLOB_RECURSE header_files ${PROJECT_SOURCE_DIR}/contrib/${contrib_name}/*.h)
     write_module_header("contrib-${contrib_name}" "${header_files}")
+
+    #Copy header files
+    file(COPY ${header_files} DESTINATION ${CMAKE_HEADER_OUTPUT_DIRECTORY})
+
 endmacro()
 

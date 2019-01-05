@@ -1,7 +1,7 @@
 #######################################
 # Required CMake version#
 #######################################
-cmake_minimum_required( VERSION 3.1 )
+cmake_minimum_required( VERSION 3.11 )
 
 #set(CMAKE_C_COMPILER "clang")
 #set(CMAKE_CXX_COMPILER "clang++")
@@ -21,10 +21,13 @@ option(NS3_TESTS "Enable tests to be built" OFF)
 #set(NS3_TESTS ON)
 
 option(NS3_EXAMPLES "Enable examples to be built" OFF)
-set(NS3_EXAMPLES OFF)
+#set(NS3_EXAMPLES OFF)
 
 option(NS3_DEBUG "Build NS3-lib in debug mode" OFF)
 set(NS3_DEBUG ON)
+
+option(NS3_SANITIZE "Run Google sanitizers" OFF)
+#set(NS3_SANITIZE ON)
 
 option(NS3_PYTHON "Build NS3-lib pybindings" OFF)
 set(NS3_PYTHON ON)
@@ -39,10 +42,13 @@ option(NS3_LIBXML2 "Build with LIBXML2 support" OFF)
 set(NS3_LIBXML2 ON)
 
 option(NS3_LIBRT "Build with RT support" OFF)
-set(NS3_LIBRT OFF) #not working on Windows
+set(NS3_LIBRT ON) #not working on Windows
 
 option(NS3_MPI "Build with MPI support" OFF)
 set(NS3_MPI OFF)
+
+option(NS3_PYTORCH "Build components that rely on PyTorch support" OFF)
+#set(NS3_PYTORCH ON)
 
 option(NS3_GSL "Build with GSL support" OFF)
 set(NS3_GSL ON)
@@ -63,7 +69,7 @@ option(NS3_BRITE "Build with Brite support" OFF)
 set(NS3_BRITE OFF)
 
 option(NS3_NETANIM "Build netanim support" OFF)
-set(NS3_NETANIM OFF)
+set(NS3_NETANIM ON)
 
 option(AUTOINSTALL_DEPENDENCIES "Automatically download and compile required dependencies with Vcpkg" OFF)
 set(AUTOINSTALL_DEPENDENCIES ON)
@@ -76,7 +82,7 @@ set(libs_to_build
         #aodv                  #
         #applications          #
         #bridge                #
-        ##brite
+        #brite
         #buildings             #
         #click                 #
         #config-store          #
@@ -86,7 +92,7 @@ set(libs_to_build
         #dsdv                  #
         #dsr                   #
         #energy                #
-        ##fd-net-device        #requires socket implementation
+        #fd-net-device         #requires socket implementation
         #flow-monitor          #
         #internet              #
         #internet-apps         #
@@ -96,18 +102,18 @@ set(libs_to_build
         #mobility              #
         #mpi                   #
         #netanim               # Not working with Clang on Windows
-        network               #
+        #network               #
         #nix-vector-routing
         #olsr
-        ##openflow
+        #openflow
         #point-to-point        #
         #point-to-point-layout
         #propagation           #
         #sixlowpan
         #spectrum              #
         #stats                 #
-        ##tap-bridge           #
-        #test
+        #tap-bridge            #
+        #test                  # beware of naming colisions between macro CHECK in traced-value-callback-typedef-test-suite.cc and torch/script.h (PyTorch)
         #topology-read         # fixed on Windows with LibPCRE2-posix
         #traffic-control       #
         #uan                   #
@@ -118,12 +124,15 @@ set(libs_to_build
         #wimax                 #
         )
 
+#Build contribution libraries
+set(contribution_libraries_to_build
+        haraldott
+        )
 
 #######################################
 # Process options                     #
 #######################################
 process_options()
-
 
 #######################################
 # Add subdirectories                  #
@@ -137,9 +146,6 @@ add_subdirectory(src)
 
 #Build NS library examples
 add_subdirectory(examples)
-
-#Build contribution libraries
-add_subdirectory(contrib)
 
 #Build scratch/simulation scripts
 add_subdirectory(scratch)

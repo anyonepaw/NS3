@@ -1,30 +1,16 @@
-#include Cristian Adam cmake modules to increase cmake speed
-if(${CMAKE_VERSION} VERSION_LESS "3.11.0")
-    message(WARNING "Cristian Adam CMakeChecksCache modules to speed up cmake requires CMake 3.11")
-elseif()
-    list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/buildsupport/CMakeChecksCache")
-endif()
+include(buildsupport/vcpkg_hunter.cmake)
 
-if (${AUTOINSTALL_DEPENDENCIES})
-    find_package(Git)
-    if(NOT GIT_FOUND)
-        message(ERROR "Git is required for Vcpkg and automatically installing dependencies")
-    endif()
-    include(buildsupport/vcpkg_hunter.cmake)
-    setup_vcpkg()
-endif()
 
 if (WIN32)
     #If using MSYS2
-    set(MSYS2_PATH                  "C:\\tools\\msys64\\mingw64")
-    set(GTK2_GDKCONFIG_INCLUDE_DIR  "${MSYS2_PATH}\\include\\gtk-2.0")
+    set(MSYS2_PATH "C:\\tools\\msys64\\mingw64")
+    set(GTK2_GDKCONFIG_INCLUDE_DIR "${MSYS2_PATH}\\include\\gtk-2.0")
     set(GTK2_GLIBCONFIG_INCLUDE_DIR "${MSYS2_PATH}\\include\\gtk-2.0")
-    set(QT_QMAKE_EXECUTABLE         "${MSYS2_PATH}\\bin\\qmake.exe")
-    set(QT_RCC_EXECUTABLE           "${MSYS2_PATH}\\bin\\rcc.exe")
-    set(QT_UIC_EXECUTABLE           "${MSYS2_PATH}\\bin\\uic.exe")
-    set(QT_MOC_EXECUTABLE           "${MSYS2_PATH}\\bin\\moc.exe")
-    set(QT_MKSPECS_DIR              "${MSYS2_PATH}\\share\\qt4\\mkspecs")
-    set(Python2_EXEC                "${MSYS2_PATH}\\bin\\python2.exe")
+    set(QT_QMAKE_EXECUTABLE "${MSYS2_PATH}\\bin\\qmake.exe")
+    set(QT_RCC_EXECUTABLE   "${MSYS2_PATH}\\bin\\rcc.exe")
+    set(QT_UIC_EXECUTABLE   "${MSYS2_PATH}\\bin\\uic.exe")
+    set(QT_MOC_EXECUTABLE   "${MSYS2_PATH}\\bin\\moc.exe")
+    set(QT_MKSPECS_DIR      "${MSYS2_PATH}\\share\\qt4\\mkspecs")
 endif()
 
 #Fixed definitions
@@ -36,7 +22,6 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_OUTPUT_DIRECTORY}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_OUTPUT_DIRECTORY}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_OUTPUT_DIRECTORY}/bin)
 set(CMAKE_HEADER_OUTPUT_DIRECTORY  ${CMAKE_OUTPUT_DIRECTORY}/ns3)
-
 add_definitions(-DNS_TEST_SOURCEDIR="${CMAKE_OUTPUT_DIRECTORY}/test")
 
 #fPIC 
@@ -61,28 +46,42 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 endif()
 
 
-
 #process all options passed in main cmakeLists
 macro(process_options)
     #Copy all header files to outputfolder/include/
     file(GLOB_RECURSE include_files ${PROJECT_SOURCE_DIR}/src/*.h) #just copying every single header into ns3 include folder
     file(COPY ${include_files} DESTINATION ${CMAKE_HEADER_OUTPUT_DIRECTORY})
 
-    file(GLOB_RECURSE include_files ${PROJECT_SOURCE_DIR}/3rd-party/netanim-3.108/*.h) #just copying every single header into ns3 include folder
+    file(GLOB_RECURSE include_files ${PROJECT_SOURCE_DIR}/3rd-party/netanim/*.h) #just copying every single header from netanim into ns3 include folder
     file(COPY ${include_files} DESTINATION ${CMAKE_HEADER_OUTPUT_DIRECTORY})
 
     #Set common include folder
     include_directories(${CMAKE_OUTPUT_DIRECTORY})
 
+    if (${AUTOINSTALL_DEPENDENCIES})
+        setup_vcpkg()
+    endif()
+
     #Set C++ standard
-    set(CMAKE_CXX_STANDARD 17) #c++17 for inline variables in Windows
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    if(${NS3_PYTORCH})
+        set(CMAKE_CXX_STANDARD 11) #c++17 for inline variables in Windows
+        #set(CMAKE_CXX_STANDARD_REQUIRED ON) #ABI requirements for PyTorch affect this
+    else()
+        set(CMAKE_CXX_STANDARD 17) #c++17 for inline variables in Windows
+        set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    endif()
+
+    if(${NS3_SANITIZE})
+        #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address,leak,thread,undefined,memory -g")
+    endif()
+
 
     #find required dependencies
     list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/buildsupport/custom_modules")
 
 
     set(NOT_FOUND_MSG  "is required and couldn't be found")
+
     #Libpcre2 for regex
     find_package(PCRE)
     if (NOT ${PCRE_FOUND})
@@ -139,7 +138,7 @@ macro(process_options)
 
     #LibXml2
     if(${NS3_LIBXML2})
-        find_package(LibXml2 REQUIRED)
+        find_package(LibXml2)
         if(NOT ${LIBXML2_FOUND})
             if (NOT ${AUTOINSTALL_DEPENDENCIES})
                 message(FATAL_ERROR "LibXML2 ${NOT_FOUND_MSG}")
@@ -150,7 +149,12 @@ macro(process_options)
                 link_directories(${libxml2_dir}/lib)
                 include_directories(${libxml2_dir}/include)
                 #set(LIBXML2_DEFINITIONS)
-                set(LIBXML2_LIBRARIES libxml2)
+
+                if(WIN)
+                    set(LIBXML2_LIBRARIES libxml2)
+                else()
+                    set(LIBXML2_LIBRARIES libxml2.a)
+                endif()
             endif()
         else()
             link_directories(${LIBXML2_LIBRARY_DIRS})
@@ -187,6 +191,7 @@ macro(process_options)
     endif()
     set(THREADS_FOUND TRUE)
 
+
     if(${NS3_PYTHON})
         find_package(Python2 REQUIRED COMPONENTS Interpreter Development)
         if (NOT ${Python2_FOUND})
@@ -215,18 +220,27 @@ macro(process_options)
     endif()
 
     if(${NS3_GSL})
-        find_package(GSL REQUIRED)
+        find_package(GSL)
         if(NOT ${GSL_FOUND})
             #message(FATAL_ERROR GSL not found)
             #If we don't find installed, install
             add_package (gsl)
             get_property(gsl_dir GLOBAL PROPERTY DIR_gsl)
-               link_directories(${gsl_dir}/lib)
+            link_directories(${gsl_dir}/lib)
             include_directories(${gsl_dir}/include)
+            set(GSL_LIBRARIES gsl gslcblas)
         else()
             include_directories( ${GSL_INCLUDE_DIRS})
             link_directories(${GSL_LIBRARY})
         endif()
+    endif()
+
+    if(${NS3_PYTORCH})
+        list(APPEND CMAKE_PREFIX_PATH "/usr/local/lib/python3.6/dist-packages/torch")#installed with sudo pip3 install torch torchvision
+        find_package(Torch REQUIRED)
+        include_directories(${TORCH_INCLUDE_DIRS})
+        #link_directories(${TORCH_LIBDIR})
+        add_definitions(${TORCH_CXX_FLAGS})
     endif()
 
     #if(${NS3_GNUPLOT})
@@ -242,7 +256,7 @@ macro(process_options)
     #if(${NS3_BRITE})
     #    find_package(Brite)
     #    if(NOT ${BRITE_FOUND})
-    #        message(FATAL_ERROR BRITEnot found)
+    #        message(FATAL_ERROR BRITE not found)
     #    else()
     #    endif()
     #endif()
@@ -305,6 +319,7 @@ macro(process_options)
     #Create library names to solve dependency problems with macros that will be called at each lib subdirectory
     set(ns3-libs )
     set(ns3-libs-tests )
+    set(ns3-contrib-libs )
     foreach(libname ${libs_to_build})
         #Create libname of output library of module
         set(lib${libname} ns${NS3_VER}-${libname}-${build_type})
@@ -317,6 +332,9 @@ macro(process_options)
 	#Dump definitions for later use
     get_directory_property( ADDED_DEFINITIONS COMPILE_DEFINITIONS )
     file(WRITE ${CMAKE_HEADER_OUTPUT_DIRECTORY}/ns3-definitions "${ADDED_DEFINITIONS}")
+
+    #All contrib libraries can be linked afterwards linking with ${ns3-contrib-libs}
+    process_contribution(${contribution_libraries_to_build})
 endmacro()
 
 macro (write_module_header name header_files)
@@ -333,6 +351,12 @@ macro (write_module_header name header_files)
     list(APPEND contents ${final_name})
     list(APPEND contents "
     // Module headers: ")
+
+    #Add libmodule_export.h if on Windows, to import DLLs
+    #if (WIN32 AND ${NS3_SHARED})
+    #    list(APPEND contents "
+    ##include <ns3/lib${name}_export.h>")
+    #endif()
 
     #Write each header listed to the contents variable
     foreach(header ${header_files})
@@ -374,6 +398,11 @@ macro (build_lib libname source_files header_files libraries_to_link test_source
     #Create shared library with sources and headers
     add_library(${lib${libname}} SHARED "${source_files}" "${header_files}")
 
+    #Windows dlls require export headers for executables (╯°□°）╯︵ ┻━┻)
+    #if(WIN32 AND ${NS3_SHARED})
+    #    generate_export_header(${lib${libname}} EXPORT_FILE_NAME lib${libname}_export.h)
+    #    file(COPY ${CMAKE_CACHEFILE_DIR}/src/${libname}/lib${libname}_export.h DESTINATION ${CMAKE_HEADER_OUTPUT_DIRECTORY}/)
+    #endif()
     #Link the shared library with the libraries passed
     target_link_libraries(${lib${libname}} ${LIB_AS_NEEDED_PRE} ${libraries_to_link} ${LIB_AS_NEEDED_POST})
 
@@ -392,7 +421,7 @@ macro (build_lib libname source_files header_files libraries_to_link test_source
             add_library(${test${libname}} SHARED "${test_sources}")
 
             #Link test library to the module library
-            target_link_libraries(${test${libname}} ${LIB_AS_NEEDED_PRE} ${lib${libname}} ${LIB_AS_NEEDED_POST})
+            target_link_libraries(${test${libname}} ${LIB_AS_NEEDED_PRE} ${lib${libname}} ${libraries_to_link} ${LIB_AS_NEEDED_POST})
         endif()
     endif()
 
